@@ -14,6 +14,16 @@ import AsyncAlgorithms
 
 #if canImport(Darwin)
 final class TestThroughput: XCTestCase {
+  func test_buffer() async {
+    await measureSequenceThroughput(output: 1) {
+      $0.buffer(policy: .unbounded)
+    }
+  }
+  func test_buffer_old() async {
+    await measureSequenceThroughput(output: 1) {
+      $0.bufferOld(policy: .unbounded)
+    }
+  }
   func test_chain2() async {
     await measureSequenceThroughput(firstOutput: 1, secondOutput: 2) {
       chain($0, $1)

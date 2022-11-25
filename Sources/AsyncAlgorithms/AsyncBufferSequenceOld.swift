@@ -25,12 +25,12 @@ actor AsyncBufferState<Input: Sendable, Output: Sendable> {
       }
     }
   }
-  
+
   var pending = [UnsafeContinuation<Result<Output?, Error>, Never>]()
   var terminationState = TerminationState.running
 
   init() { }
-  
+
   func drain<Buffer: AsyncBuffer>(buffer: Buffer) async where Buffer.Input == Input, Buffer.Output == Output {
     guard pending.count > 0 else {
       return
@@ -63,12 +63,12 @@ actor AsyncBufferState<Input: Sendable, Output: Sendable> {
     await buffer.push(item)
     await drain(buffer: buffer)
   }
-  
+
   func fail<Buffer: AsyncBuffer>(_ error: Error, buffer: Buffer) async where Buffer.Input == Input, Buffer.Output == Output {
     terminationState = .baseFailure(error)
     await drain(buffer: buffer)
   }
-  
+
   func finish<Buffer: AsyncBuffer>(buffer: Buffer) async where Buffer.Input == Input, Buffer.Output == Output {
     if case .running = terminationState {
       terminationState = .baseTermination
@@ -132,7 +132,7 @@ public protocol AsyncBuffer: Actor {
 
   /// Push an element to enqueue to the buffer
   func push(_ element: Input) async
-  
+
   /// Pop an element from the buffer.
   ///
   /// Implementors of `pop()` may throw. In cases where types
@@ -152,10 +152,10 @@ public actor AsyncLimitBuffer<Element: Sendable>: AsyncBuffer {
     /// A policy for limiting to a specific number of newest values.
     case bufferingNewest(Int)
   }
-  
+
   var buffer = [Element]()
   let policy: Policy
-  
+
   init(policy: Policy) {
     // limits should always be greater than 0 items
     switch policy {
@@ -167,7 +167,7 @@ public actor AsyncLimitBuffer<Element: Sendable>: AsyncBuffer {
     }
     self.policy = policy
   }
-  
+
   /// Push an element to enqueue to the buffer.
   public func push(_ element: Element) async {
     switch policy {
@@ -188,7 +188,7 @@ public actor AsyncLimitBuffer<Element: Sendable>: AsyncBuffer {
       }
     }
   }
-  
+
   /// Pop an element from the buffer.
   public func pop() async -> Element? {
     guard buffer.count > 0 else {
@@ -207,45 +207,45 @@ extension AsyncSequence where Element: Sendable, Self: Sendable {
   ///
   /// - Parameter createBuffer: A closure that constructs a new `AsyncBuffer` actor to store buffered values.
   /// - Returns: An asynchronous sequence that buffers elements using the specified `AsyncBuffer`.
-  public func buffer<Buffer: AsyncBuffer>(_ createBuffer: @Sendable @escaping () -> Buffer) -> AsyncBufferSequence<Self, Buffer> where Buffer.Input == Element {
-    AsyncBufferSequence(self, createBuffer: createBuffer)
+  public func bufferOld<Buffer: AsyncBuffer>(_ createBuffer: @Sendable @escaping () -> Buffer) -> AsyncBufferSequenceOld<Self, Buffer> where Buffer.Input == Element {
+    AsyncBufferSequenceOld(self, createBuffer: createBuffer)
   }
-  
+
   /// Creates an asynchronous sequence that buffers elements using a specific policy to limit the number of
   /// elements that are buffered.
   ///
   /// - Parameter policy: A limiting policy behavior on the buffering behavior of the `AsyncBufferSequence`
   /// - Returns: An asynchronous sequence that buffers elements up to a given limit.
-  public func buffer(policy limit: AsyncLimitBuffer<Element>.Policy) -> AsyncBufferSequence<Self, AsyncLimitBuffer<Element>> {
-    buffer {
+  public func bufferOld(policy limit: AsyncLimitBuffer<Element>.Policy) -> AsyncBufferSequenceOld<Self, AsyncLimitBuffer<Element>> {
+    bufferOld {
       AsyncLimitBuffer(policy: limit)
     }
   }
 }
 
 /// An `AsyncSequence` that buffers elements utilizing an `AsyncBuffer`.
-public struct AsyncBufferSequence<Base: AsyncSequence & Sendable, Buffer: AsyncBuffer> where Base.Element == Buffer.Input {
+public struct AsyncBufferSequenceOld<Base: AsyncSequence & Sendable, Buffer: AsyncBuffer> where Base.Element == Buffer.Input {
   let base: Base
   let createBuffer: @Sendable () -> Buffer
-  
+
   init(_ base: Base, createBuffer: @Sendable @escaping () -> Buffer) {
     self.base = base
     self.createBuffer = createBuffer
   }
 }
 
-extension AsyncBufferSequence: Sendable where Base: Sendable { }
+extension AsyncBufferSequenceOld: Sendable where Base: Sendable { }
 
-extension AsyncBufferSequence: AsyncSequence {
+extension AsyncBufferSequenceOld: AsyncSequence {
   public typealias Element = Buffer.Output
-  
+
   /// The iterator for a `AsyncBufferSequence` instance.
   public struct Iterator: AsyncIteratorProtocol {
     struct Active {
       var task: Task<Void, Never>?
       let buffer: Buffer
       let state: AsyncBufferState<Buffer.Input, Buffer.Output>
-      
+
       init(_ base: Base, buffer: Buffer, state: AsyncBufferState<Buffer.Input, Buffer.Output>) {
         self.buffer = buffer
         self.state = state
@@ -261,7 +261,7 @@ extension AsyncBufferSequence: AsyncSequence {
           }
         }
       }
-      
+
       func next() async rethrows -> Element? {
         let result: Result<Element?, Error> = await withTaskCancellationHandler {
           do {
@@ -277,18 +277,18 @@ extension AsyncBufferSequence: AsyncSequence {
         return try result._rethrowGet()
       }
     }
-    
+
     enum State {
       case idle(Base, @Sendable () -> Buffer)
       case active(Active)
     }
-    
+
     var state: State
-    
+
     init(_ base: Base, createBuffer: @Sendable @escaping () -> Buffer) {
       state = .idle(base, createBuffer)
     }
-    
+
     public mutating func next() async rethrows -> Element? {
       switch state {
       case .idle(let base, let createBuffer):
@@ -301,7 +301,7 @@ extension AsyncBufferSequence: AsyncSequence {
       }
     }
   }
-  
+
   public func makeAsyncIterator() -> Iterator {
     Iterator(base, createBuffer: createBuffer)
   }
