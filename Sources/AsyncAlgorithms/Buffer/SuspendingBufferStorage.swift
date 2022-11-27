@@ -8,14 +8,14 @@
 // See https://swift.org/LICENSE.txt for license information
 //
 //===----------------------------------------------------------------------===//
-struct SuspendingBufferStorage<Element>: BufferStorage {
+public struct SuspendingBufferStorage<Element>: BufferStorage {
   private let stateMachine: ManagedCriticalState<SuspendingBufferStateMachine<Element>>
 
   init(limit: UInt) {
     self.stateMachine = ManagedCriticalState(SuspendingBufferStateMachine(limit: limit))
   }
 
-  func send(element: Element) async {
+  public func send(element: Element) async {
     let isCancelled = ManagedCriticalState(false)
 
     await withTaskCancellationHandler {
@@ -54,7 +54,7 @@ struct SuspendingBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func finish() {
+  public func finish() {
     self.stateMachine.withCriticalRegion { stateMachine in
       let action = stateMachine.finish()
 
@@ -67,7 +67,7 @@ struct SuspendingBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func fail(error: some Error) {
+  public func fail(error: some Error) {
     self.stateMachine.withCriticalRegion { stateMachine in
       let action = stateMachine.fail(error: error)
 
@@ -80,7 +80,7 @@ struct SuspendingBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func next() async -> Result<Element?, Error> {
+  public func next() async -> Result<Element?, Error> {
     guard !Task.isCancelled else { return .success(nil) }
 
     let isCancelled = ManagedCriticalState(false)

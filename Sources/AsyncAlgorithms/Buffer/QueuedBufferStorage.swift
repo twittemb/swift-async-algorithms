@@ -23,14 +23,14 @@ public enum QueuedBufferPolicy: Sendable {
   }
 }
 
-struct QueuedBufferStorage<Element>: BufferStorage {
+public struct QueuedBufferStorage<Element>: BufferStorage {
   private let stateMachine: ManagedCriticalState<QueuedBufferStateMachine<Element>>
 
   init(policy: QueuedBufferPolicy) {
     self.stateMachine = ManagedCriticalState(QueuedBufferStateMachine(policy: policy))
   }
 
-  func send(element: Element) async {
+  public func send(element: Element) async {
     self.stateMachine.withCriticalRegion { stateMachine in
       let action = stateMachine.newElement(element: element)
 
@@ -43,7 +43,7 @@ struct QueuedBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func fail(error: some Error) {
+  public func fail(error: some Error) {
     self.stateMachine.withCriticalRegion { stateMachine in
       let action = stateMachine.fail(error: error)
 
@@ -56,7 +56,7 @@ struct QueuedBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func finish() {
+  public func finish() {
     self.stateMachine.withCriticalRegion { stateMachine in
       let action = stateMachine.finish()
 
@@ -69,7 +69,7 @@ struct QueuedBufferStorage<Element>: BufferStorage {
     }
   }
 
-  func next() async -> Result<Element?, Error> {
+  public func next() async -> Result<Element?, Error> {
     guard !Task.isCancelled else {  return .success(nil) }
 
     let isCancelled = ManagedCriticalState(false)
