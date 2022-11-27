@@ -9,12 +9,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-public protocol BufferStorage<Element> {
+public protocol BufferStorage<Element>: Sendable {
   associatedtype Element
-  @Sendable func send(element: Element) async
-  @Sendable func fail(error: Error)
-  @Sendable func finish()
-  @Sendable func next() async -> Result<Element?, Error>
+  func send(element: Element) async
+  func fail(error: Error)
+  func finish()
+  func next() async -> Result<Element?, Error>
 }
 
 extension AsyncSequence where Self: Sendable {
@@ -42,29 +42,20 @@ public struct AsyncBufferSequence<Base: AsyncSequence & Sendable>: AsyncSequence
   public typealias AsyncIterator = Iterator
 
   let base: Base
-  let send: @Sendable (Element) async -> Void
-  let fail: @Sendable (Error) -> Void
-  let finish: @Sendable () -> Void
-  let next: @Sendable () async -> Result<Element?, Error>
+  let storage: any BufferStorage<Element>
 
   public init(
     base: Base,
     storage: some BufferStorage<Element>
   ) {
     self.base = base
-    self.send = storage.send(element:)
-    self.fail = storage.fail(error:)
-    self.finish = storage.finish
-    self.next = storage.next
+    self.storage = storage
   }
 
   public func makeAsyncIterator() -> Iterator {
     return Iterator(
       base: self.base,
-      send: self.send,
-      fail: self.fail,
-      finish: self.finish,
-      next: self.next
+      storage: self.storage
     )
   }
 
@@ -73,42 +64,25 @@ public struct AsyncBufferSequence<Base: AsyncSequence & Sendable>: AsyncSequence
     var taskIsSpawned = false
 
     let base: Base
-    let send: @Sendable (Element) async -> Void
-    let fail: @Sendable (Error) -> Void
-    let finish: @Sendable () -> Void
-    let next: @Sendable () async -> Result<Element?, Error>
-
-    init(
-      base: Base,
-      send: @Sendable @escaping (Element) async -> Void,
-      fail: @Sendable @escaping (Error) -> Void,
-      finish: @Sendable @escaping () -> Void,
-      next: @Sendable @escaping () async -> Result<Element?, Error>
-    ) {
-      self.base = base
-      self.send = send
-      self.fail = fail
-      self.finish = finish
-      self.next = next
-    }
+    let storage: any BufferStorage<Element>
 
     public mutating func next() async rethrows -> Element? {
       try await withTaskCancellationHandler {
         if !taskIsSpawned {
           self.taskIsSpawned = true
-          self.task = Task { [base, send, finish, fail] in
+          self.task = Task { [base, storage] in
             var iterator = base.makeAsyncIterator()
             do {
               while let element = try await iterator.next() {
-                await send(element)
+                await storage.send(element: element)
               }
-              finish()
+              storage.finish()
             } catch {
-              fail(error)
+              storage.fail(error: error)
             }
           }
         }
-        return try await self.next()._rethrowGet()
+        return try await self.storage.next()._rethrowGet()
       } onCancel: { [task] in
         task?.cancel()
       }
