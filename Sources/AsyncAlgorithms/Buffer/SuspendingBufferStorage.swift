@@ -8,7 +8,7 @@
 // See https://swift.org/LICENSE.txt for license information
 //
 //===----------------------------------------------------------------------===//
-struct SuspendingBufferStorage<Element>: BufferStorage {
+struct SuspendingBufferStorage<Element>: Sendable {
   private let stateMachine: ManagedCriticalState<SuspendingBufferStateMachine<Element>>
 
   init(limit: UInt) {

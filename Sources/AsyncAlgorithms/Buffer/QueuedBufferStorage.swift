@@ -23,7 +23,7 @@ public enum QueuedBufferPolicy: Sendable {
   }
 }
 
-struct QueuedBufferStorage<Element>: BufferStorage {
+struct QueuedBufferStorage<Element>: Sendable {
   private let stateMachine: ManagedCriticalState<QueuedBufferStateMachine<Element>>
 
   init(policy: QueuedBufferPolicy) {
